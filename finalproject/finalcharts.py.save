@@ -1,0 +1,44 @@
+#import pymongo module
+import pymongo
+#import pygal graphing module
+import pygal
+
+#Connect to the mongodb server
+#change username and password below with your own
+myclient = pymongo.MongoClient(host = "mongodb://localhost:27017/",
+serverSelectionTimeoutMS = 3000,
+username="Username",
+password='Password')
+
+#Select the module12 database
+db = myclient["finalyproject"]
+
+#Choose the crime collection from the module12 database
+collection = db["crime"]
+
+#Plot the annual statistics for Murder and Robbery for the entire dataset  (1994 - 2013)
+result_cursor = collection.find({},{"Murder": 1, "Robbery": 1, "Year": 1})
+
+#Create empty lists to store murder and robbery data in
+murder = []
+robbery = []
+years = []
+
+#store the murder and robbery stats into lists
+for doc in result_cursor:
+    murder.append(doc["Murder"])
+    robbery.append(doc["Robbery"])
+    years.append(doc["Year"])
+
+#Export the data in a chart to an SVG file
+bar_chart = pygal.Bar()
+bar_chart.title = "Demo: Murder & Robbery Stats"
+bar_chart.x_labels = map(str, years) #set x axis labels to the years
+bar_chart.add('Murder', murder) # add murder data to the graph using the murder list
+bar_chart.add('Robbery',robbery) # add robbery data to the graph using the robbery list
+bar_chart.render_to_file('images/test_chart.svg') #render the chart to an SVG file
+
+#If program is successful print this
+print("Program executed successfully")
+
+### Write your queries and create your charts below

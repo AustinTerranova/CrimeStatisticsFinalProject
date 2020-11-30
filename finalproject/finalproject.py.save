@@ -1,0 +1,186 @@
+#import mysql connector and pygal
+import mysql.connector
+import pymongo
+import pygal
+import json
+
+##################### SETUP  DATABASE CONNECTIONS ###############
+
+#connect to your mysql datbase
+mydb = mysql.connector.connect(
+  host="159.65.185.126",
+  user="austin",
+  passwd="austin13",
+  database="classicmodels"
+)
+
+#connect to the mongo database
+mongo_client = pymongo.MongoClient(host = "mongodb://localhost:27017/",
+serverSelectionTimeoutMS = 3000,
+username="Username",
+password='Password')
+
+#Select mongo datacbase and collections
+mongo_db = mongo_client["finalproject"]
+employee_collection = mongo_db["employees"]
+customer_collection = mongo_db["customers"]
+product_collection = mongo_db["products"]
+order_collection = mongo_db["orders"]
+#The cursor will execute queries on your MySql Datbase
+mycursor = mydb.cursor()
+
+################# QUERIES TO POPULATE EMPLOYEE COLLECTION  ####################
+
+#sql query generates a list of managers. People who have other employees report to them
+sql_query = '''select employeeNumber, firstName, lastName
+from employees
+where employeeNumber IN (select reportsTo from employees);'''
+
+
+
+
+#Execute the query
+mycursor.execute(sql_query)
+
+#Get the query result
+query_result = mycursor.fetchall()
+
+#Create managers dictionary
+managers = {}
+
+'''query_result is a list of tuples. The loop below converts the list of tuples into
+a dictionary where the dictionary key is the employeeNumber and the value is the 
+first and last name'''
+for result in query_result:
+    managers[result[0]] = result[1] + " " + result[2]
+
+#Select all data from the employees and offices tables
+sql_query = '''SELECT *
+FROM employees e, offices o
+WHERE e.officeCode = o.officeCode;'''
+sql_customerQuery =  '''SELECT * FROM customers c, payments p						WHERE c.customerNumber = p.customerNumber; '''
+
+#Execute the query
+mycursor.executemany(sql_query,sql_customerQuery)
+
+#Get the query results
+query_result = mycursor.fetchall()
+
+#################### WRITE DOCUMENTS TO INSERT INTO EMPLOYEE COLLECTIONS ################
+
+#list to store employee documents
+employees = []
+customers = []
+products = []
+orders = []
+#loop through tuples in query_result. Write data to json format to store in our json file
+for record in query_result:
+    office_document = {
+    "officeCode": record[8],
+    "city": record[9],
+    "phone": record[10],
+    "addressLine1": record[11],
+    "addressLine2": record[12],
+    "state": record[13],
+    "country" : record[14],
+    "postalCode": record[15],
+    "territory": record[16]
+    }
+    
+    '''for employees who don't report to anyone, set the reportsTo value to N/A
+    for other employees with a manager get the manager name from the managers dictionary
+    using the the employeeNumber as the dictionary key'''
+    if record[6] == None:
+        manager = "N/A"
+    else:
+        manager = managers[int(record[6])]
+
+    employee_document = {
+    "_id": record[0],
+    "lastName": record[1],
+    "firstName": record[2],
+    "extension": record[3],
+    "email": record[4],
+    "reportsTo": manager,
+    "jobTitle": record[7],
+    "office": office_document
+    }
+    employees.append(employee_document)
+
+for result in query_customerQuery:
+	payment_document= {[
+        {
+          "checkNumber": result[13] ,
+          "paymentDate": result[14],
+          "amount": result[15] 
+        },
+        {
+          "checkNumber": result[16],
+          "paymentDate": result[17],
+          "amount": result[18],  
+        }]
+    }
+
+
+
+	customer_document = {
+    "customerNumber":result[0] ,
+    "customerName": result[1],
+    "contactLastName" : result[2],
+    "contactFirstName": result[3],
+    "phone": result[4],
+    "addressLine1" : result[5],
+    "addressLine2" : result[6],
+    "city": result[7],
+    "state": result[8],
+    "postalCode": result[9],
+    "country": result[10],
+    "salesRepEmployeeNumber": result[11],
+    "creditLimit": result[12],
+	"payments": payment_document
+	}
+	customers.append(customer_document)
+
+#insert employee documents into the employees collection in the mongo database
+employee_collection.drop()
+employee_collection.insert_many(employees)
+employee_collection.insert_many(customers)
+#write to mongo formated data to a json file
+json_file = open("employees.json", "w") #open the file
+json_file.write("[\n") #write the opening bracket forthe list
+counter = 1 #use counter to determine id the last document is being written
+
+#loop through the list of employee documents
+for employee_doc in employees:
+    json_file.write(json.dumps(employee_doc)) #convert a python dictionary to a json object
+    #write a comma after the document if it is not the last in the list
+    if counter != len(employees):
+        json_file.write(",\n")
+        counter += 1
+    else: #don't write a comma after the document if it is the last in the list
+        json_file.write("\n")
+
+json_file.write("]\n")
+json_file.close()
+
+
+#write to mongo formated data to a json file
+json_file = open("customers.json", "w") #open the file
+json_file.write("[\n") #write the opening bracket forthe list
+counter = 1 #use counter to determine id the last document is being written
+
+#loop through the list of employee documents
+for customer_doc in customers:
+    json_file.write(json.dumps(customer_doc)) #convert a python dictionary to a json object
+    #write a comma after the document if it is not the last in the list
+    if counter != len(customer):
+        json_file.write(",\n")
+        counter += 1
+    else: #don't write a comma after the document if it is the last in the list
+        json_file.write("\n")
+
+json_file.write("]\n")
+json_file.close()
+
+
+print("\nScript executed successfully")
